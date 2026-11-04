@@ -5,6 +5,8 @@
 ```bash
 ./start.sh --fake --no-docker --yes
 ./start.sh test --yes
+# 依赖就绪后使用不安装模式重复检查
+./start.sh test --no-install
 ```
 
 `./start.sh test` 会跑 ESLint、`tsc --checkJs`、单元测试和无头冒烟。改完判定或协议，这两条都要过。
@@ -12,7 +14,7 @@
 ## 代码放哪
 
 - 手感数字只加在 `frontend/js/tuning.js`。
-- 「这一拍算不算」放在状态机（`play-machine.js`、`kitten-machine.js`、`season-machine.js`、`season-beats.js`），用 `frontend/js/bus.js` 把结果交出去。网格、声音、字幕留在原来的订阅端。
+- 「这一拍算不算」放在状态机（`play-machine.js`、`kitten-machine.js`、`season-machine.js`、`season-beats.js`、`tap-machine.js`），用 `frontend/js/bus.js` 把结果交出去。网格、声音、字幕留在原来的订阅端。
 - 新的角度来源实现 `docs/ADAPTERS.md` 的契约，不要改 v1 帧的字段名。
 - 纯函数用 `node --test` 或 `unittest` 测。需要浏览器的行为加在 `tests/e2e/smoke.py` 这一条里，不要再按版本堆脚本。
 

@@ -15,7 +15,14 @@ HTTP_PORT = 17666
 
 
 def _read_text_frame(port):
-    s = socket.create_connection(("127.0.0.1", port), 2)
+    for attempt in range(40):
+        try:
+            s = socket.create_connection(("127.0.0.1", port), 2)
+            break
+        except ConnectionRefusedError:
+            if attempt == 39:
+                raise
+            time.sleep(0.05)
     s.settimeout(2)
     key = "dGhlIHNhbXBsZSBub25jZQ=="
     req = (
@@ -48,8 +55,11 @@ def _read_text_frame(port):
 
 class HealthTest(unittest.TestCase):
     def test_fake_bridge_health_and_frame(self):
+        sys.path.insert(0, os.path.join(ROOT, "tests"))
+        from paths import assert_ports_free
+        assert_ports_free(WS_PORT, HTTP_PORT)
         proc = subprocess.Popen(
-            [sys.executable, BRIDGE, "--fake", "--host", "127.0.0.1", "--port", str(WS_PORT), "--http-port", str(HTTP_PORT)],
+            [sys.executable, BRIDGE, "--fake", "--no-optional-hardware", "--host", "127.0.0.1", "--port", str(WS_PORT), "--http-port", str(HTTP_PORT)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -79,12 +89,16 @@ class HealthTest(unittest.TestCase):
             self.assertIsInstance(frame["t"], (int, float))
             if frame["type"] == "angle":
                 self.assertIsInstance(frame["angle"], (int, float))
+                self.assertIsInstance(frame.get("light"), (int, float))
+            else:
+                self.assertNotIn("light", frame)
         finally:
             proc.terminate()
             try:
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
             if proc.stdout:
                 proc.stdout.close()
 

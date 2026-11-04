@@ -29,6 +29,7 @@ python3 -m venv "$VENV"
   --hidden-import sensors.lid \
   --hidden-import sensors.replay \
   --hidden-import sensors.base \
+  --hidden-import netbind \
   --distpath "$DIST" \
   --workpath "$WORK" \
   --specpath "$WORK" \
@@ -42,7 +43,7 @@ python3 -m venv "$VENV"
 WS_PORT="${POPUP_BRIDGE_SMOKE_WS:-18791}"
 HTTP_PORT="${POPUP_BRIDGE_SMOKE_HTTP:-18792}"
 LOG="$ROOT/build/bridge-smoke.log"
-"$BIN" --fake --host 127.0.0.1 --port "$WS_PORT" --http-port "$HTTP_PORT" >"$LOG" 2>&1 &
+"$BIN" --fake --no-optional-hardware --host 127.0.0.1 --port "$WS_PORT" --http-port "$HTTP_PORT" >"$LOG" 2>&1 &
 pid=$!
 cleanup() { kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
 trap cleanup EXIT

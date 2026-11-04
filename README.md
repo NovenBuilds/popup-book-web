@@ -3,6 +3,8 @@
 合上笔记本盖子 = 合上这本书；慢慢打开屏幕，一本纸艺立体书就在屏幕里展开：松林、小木屋、亮灯的窗、一只橘猫，最后是月亮、星星和萤火虫。
 网页只关心一个输入：**合页角度 `angle`（0–130°）**。没有传感器时用滑块也能完整体验。
 
+当前代码的接管基线、功能状态与验证限制见 [项目知识入口](docs/project-knowledge/index.md)（2026-11-05）。
+
 ## 先跑起来
 
 ```bash
@@ -14,7 +16,7 @@
 
 卡顿写在 `PERFORMANCE.md`。角度帧写在 `docs/PROTOCOL.md`。模块怎么分写在 `docs/ARCHITECTURE.md`。
 
-**现在是 v9，穿模和后台启动在标签 `fixed-v10`。** 玩法仍是那本会回应你的书：开得快慢、停多久、晃不晃、怎么合上，它都有不同的反应；四季随着每次开合轮换；还藏了 8 个小秘密（v4 新增 1 个）等你自己发现（提示在游戏里的"📖 小秘密"手账中，**答案放在文末"剧透"章节，想自己玩的话别往下翻**）。v8 把判定收成状态机，把角度来源收成适配器。手感数字仍在 `frontend/js/tuning.js`。春、冬各多了一句季节反应，不进手账。v9 加上 Homebrew formula 和未签名的打包脚本，仍然不签名、不上架。
+当前工作区位于 `creative/v14` 开发分支；分支名不代表已发布版本。核心体验包括四季开合、八个小秘密、猫的记忆、贴纸本、轻拍与触控板互动、分享卡及可选短片。历史演进见 `CHANGELOG.md` 与 `ITERATIONS.md`，当前能力与验收范围见项目知识入口。手感数字仍集中在 `frontend/js/tuning.js`。Homebrew 与 Mac 打包脚本尚不等于已经完成本轮安装验收。
 
 ## 一、文件
 
@@ -22,20 +24,27 @@
 
 | 路径 | 说明 |
 |---|---|
-| `frontend/` | 静态页。`index.html`、`styles.css`、`js/`（ES modules，不用打包） |
+| `frontend/` | 静态页。`index.html`、`styles.css`、`js/`（ES modules，不用打包）、`assets/icons/`（标题栏 / Apple Touch 用的圆形图标） |
 | `frontend/vendor/three.module.js` | Three.js r160，随仓库走，**离线可用** |
 | `frontend/js/story.js` | 数据：小秘密的名字/提示、四季设定与晚安台词 |
 | `frontend/js/tuning.js` | 手感阈值（`TUNING`）。改判定先改这里 |
 | `frontend/js/rules.js` | 纯判定：换季进度、时段、停住带、一整天、合盖快慢。不引用 Three |
 | `frontend/js/play-machine.js` `kitten-machine.js` `season-machine.js` `season-beats.js` | 状态机。结果经 `bus.js` 交给声音和字幕 |
-| `frontend/js/protocol.js` | 角度流解析、序号门、连接状态（过期 / 断开） |
+| `frontend/js/stage-show.js` `stage-show-view.js` | 开场幕布。角度决定暗角和纸片折痕，不判秘密 |
+| `frontend/js/kitten-memory.js` `kitten-mood.js` `kitten-lines.js` | 小猫的记性、心情、闲置小动作。纯逻辑，单测在 `tests/unit/kitten-mood.test.js`。画面在 `kitten-look.js`，存档订阅在 `kitten-wire.js` |
+| `frontend/js/protocol.js` | 角度流解析、轻拍帧（kind + strength）、序号门、连接状态（过期 / 断开） |
+| `frontend/js/tap-machine.js` `tap-accent.js` `tap-petals.js` `tap-wire.js` | 轻拍和连敲。判定不碰网格；花瓣点缀单独画，不占用换季扫场 |
 | `frontend/js/audio.js` | WebAudio 纯合成音效（没有任何音频文件） |
+| `frontend/js/hinge-feel.js` `hinge-audio.js` `sim-feel.js` | 合页动手感：角速度映射成嘎吱、纸声、轻撞和镜头微晃。强度记在存档 `feel` |
+| `frontend/js/track-weight.js` `track-weight-view.js` `track-weight-wire.js` | 触控板力度是窗台上的低频礼物。稳定一下小猫闻一闻，拿开就收回。没有读数就当没有这回事。不画秤 |
 | `frontend/js/store.js` | `localStorage` 适配。存档逻辑在 `store-core.js` |
-| `frontend/js/ui.js` | DOM：音效按钮、手账、提示气泡、"别动"进度环、晚安结尾 |
+| `frontend/js/ui.js` | DOM：音效按钮、手感、贴纸本、提示气泡、"别动"进度环、晚安结尾 |
+| `frontend/js/share-layout.js` `share-border.js` `share-draw.js` `share-capture.js` `share-wire.js` | 分享卡。排版和文案不碰画面；抓像素、下载、短片分开。没点分享时不读像素 |
+| `frontend/js/journal-hints.js` `journal-book.js` `journal-watch.js` `sticker-art.js` | 贴纸本：靠近才提示、八格手绘贴纸、揭开和集齐 |
 | `frontend/js/gfx.js` `build-*.js` `sim-*.js` `input.js` `season.js` | 场景、昼夜、小猫、输入、帧循环。入口是 `js/main.js` |
 | `backend/bridge.py` | 选择适配器。`--fake` / `--replay` / 真实合页 |
 | `backend/broadcast.py` `backend/health.py` | 协议 v1 广播和 `GET /health` |
-| `backend/sensors/` | 角度适配器。契约在 `docs/ADAPTERS.md` |
+| `backend/sensors/` | 角度适配器。契约在 `docs/ADAPTERS.md`。`force.py` 是可选力度，不是合页 |
 | `backend/protocol.py` | 角度帧、心跳、`/health` 的字段 |
 | `backend/requirements.txt` | 假桥只要 `websockets` |
 | `backend/requirements-sensor.txt` | 真实传感器再加 `pybooklid` |
@@ -79,7 +88,7 @@
 - **四季轮换**：每完整地开合一次，换一个季节，配色、飘落物、小猫的行头和窗台上的小道具都不一样（春花瓣和蝴蝶、夏草帽+西瓜、秋落叶+南瓜灯、冬雪+围巾+热可可）。**v6** 起，换季发生在下一次打开的过程里，能看见过渡。
 - **7 个小秘密**：左上"📖 小秘密 N/7"手账里有含蓄的提示，发现后会记下来（存在浏览器 `localStorage`，刷新不丢）。每隔一阵子没新发现，屏幕下方会飘出一句提示。
 - **声音**（全部现场合成）：沙沙声跟着角速度走、森林环境音（鸟鸣/虫鸣随季节和昼夜变）、小猫的喵和呼噜、猫头鹰、风铃。**出于浏览器规定，要先点一下页面（或按左上角 🔊）才会出声**；`M` 键或按钮可静音，静音状态会记住。
-- **鼠标/触控板（可选）**：小猫会用眼睛追着你的鼠标看；点小猫它会喵，**按住不放可以摸摸它**（呼噜+爱心）；点猫头鹰、点树也有反应。
+- **鼠标/触控板（可选）**：小猫会用眼睛追着你的鼠标看；点小猫它会喵，**按住不放可以摸摸它**（呼噜+爱心）；点猫头鹰、点树也有反应。盖子开过直角后，光标进入小猫就会粘住，手指和触控板滚动挪不走，`Esc` 或把盖子合低一些会松开；粘住时轻压或点一下，它眯眼呼噜。
 
 快捷键新增：`M` 静音、`J` 手账、`Esc` 关手账。URL 参数新增：`?season=0..3` 指定季节、`?reset=1` 清空存档、`?nostore=1` 本次不读写存档。
 
@@ -116,6 +125,76 @@
 - `P` 键打开性能面板（帧时间、draw call、像素比）。标签页隐藏时不画。
 - 桥可以 `--replay trace.jsonl` 重放一段角度。见 `docs/ADAPTERS.md`。
 
+## 二·十一、分享今天的小屋
+
+左上角「分享」，或按 `C`，把当前这一帧做成一张卡片：手绘边、季节和时段、一句小猫的话、小秘密 N/8、书名小印。图片会下载；浏览器允许的话也会复制到剪贴板。默认只存这张 PNG。要连一段大约 4 秒的短片一起保存，先点「短片」，或打开页面时加上 `?shareclip=1`。合页、滑块、自动演示都是当时画面上的那一帧。
+
+没点分享时，主循环只看有没有在录短片，不去读像素，也不打开 `preserveDrawingBuffer`。面板被 `H` 藏起来之后，`C` 仍然可以分享。
+
+## 二·十二、动手感（不剧透版）
+
+- 盖子转得越快，铰链越嘎吱，纸页的沙沙也越满。经过直角、开到头、合严，各有一下很轻的撞击。慢到几乎不动时这些声音会歇下来。
+- 镜头跟着速度有一点微晃、视差和视场呼吸，幅度有上限，并且是平滑的，不会晃得难受。左上角「手感」或 `K` 可以改成低、或关掉。选择会记住。
+- `M` 静音仍然关掉全部声音，包括这层拟音。关掉手感只停掉这层声音和镜头偏移，森林和猫咪的声音还在。
+- 数字在 `frontend/js/tuning.js` 的 `HINGE_FEEL`。真实合页和滑块走的是同一条曲线。
+
+## 二·十三、开场：合盖是幕布（不剧透版）
+
+- 这一档**第一次**把盖子打开，画面像幕布被盖子掀起来。合着的时候上下是暗的，中间留一道缝；再往上，纸地、松林、小屋还留着一点折痕。盖子**第一次过大约 90°**，一道暖光扫过全场，暗角松开，纸片按地面、树、小屋、窗台、小猫的顺序弹到位。
+- 同一档之后再翻开，只留很轻的一道。轻轻合上，幕布慢慢跟上；合得很快，幕布贴着盖子落下，并闪一下。手账里的小秘密没有新的一条，触发方式也没改。
+- 看过首演会记在存档里（`stageShown`）。清空手账，或地址加上 `?reset=1`，会再演一次整场。手感在 `frontend/js/tuning.js` 的 `stage*`。
+
+## 二·十四、季节仪式（花瓣 / 蝉雾 / 落叶 / 雪锋）
+
+合上再慢慢打开时，换季不再只是树色在变。大约 22°–65°，一道粒子从书页一侧扫到另一侧，扫完就收掉：
+
+- 进入春天：花瓣
+- 进入夏天：萤火虫，再加一层薄蝉雾
+- 进入秋天：叶子打着旋
+- 进入冬天：一道雪锋
+
+同一段里会响一句现场合成的短动机（春往上走、夏有蝉鸣的颤音、秋往下落、冬是稀疏的高音）。没有音频文件。先点一下页面或左上角 🔊 才会出声。
+
+把盖子合严时屏幕会灭、页面暂停绘制。合到约 5° 以下仍会计上这一次（季节 +1）。再慢慢打开，就能看见上面的扫场。若合严后进了锁屏，要等最新的盖子角度进了页面，才决定要不要补播：解开时已经开过 22°，纸页会跟着扫场一起张开，大约 1.8 秒走完，不先弹开。中途再合到 22° 以下，这场就停。短动机若当时还不能出声，等下一次盖子动了再补。页面一直开着、慢慢翻过这段，仍按盖子角度走。
+
+天空按季节和时刻拉开：清晨、正午、黄昏、夜里的天顶、天边和光色都不一样。晨昏时天边再亮一档。树、道具、行头仍是原来的材质插值，换季不重建几何。手感数字在 `frontend/js/tuning.js` 的 `ritualBand` / `ritualParticles` / `ritualHaze` / `ritualMotifVol` / `ritualTwilight`。这不是新的小秘密，手账还是 8 条。
+
+## 二·十五、贴纸本（不剧透）
+
+- 左上角还是「📖 小秘密 N/8」，按 `J` 打开。八个格子一开始是空白贴纸，不再把八条提示一起摊开。
+- 盖子停在某条秘密附近，或那一带你来回试过几次，格子才会先亮起一句「快了」。再试过几次，才写下原来那句含蓄提示。秘密什么时候算找到，规则没变。
+- 找到的那一张会揭开贴上去。八张都有了，会放一次集齐；之后打开贴纸本仍是集齐的样子，可以再看一次。进度写在原来的存档里。
+- 手感数字在 `frontend/js/tuning.js` 的 `TUNING`（`stickerBandPad`、`stickerAttemptsForHint` 等）。
+
+## 二·十六、小猫会记得你（不剧透版）
+
+- 记性写在原来的浏览器存档里。第一次见面、隔了几个小时、换了一天再打开，它打招呼的话不一样。刚刷新页面不会反复寒暄。
+- 心情会变：在它出来玩的角度停大约 9 秒，它会闭上眼、头上冒出很大的 Zzz；把盖子轻轻抖大约 1° 就伸个懒腰醒过来。四十五分钟里打开够三次，它会兴奋；二十分钟内被猛地合上过，它会把耳朵压平、脸红。手账仍是 8 条，秘密的触发角度没有改。
+- 醒着时眨眼、歪头、舔爪子会换着来，不会按同一个圈循环。偶尔冒出一句很短的话。这些话让路给秘密和换季字幕。落点没改，仍在门洞里和台阶之间的平地上。
+- 数字在 `frontend/js/tuning.js` 的 `TUNING.kitten`。
+
+## 二·十七、环境光（不剧透版）
+
+- 左上角有「开启环境光」。点一下变成「关闭环境光」，这个选择会记住。关掉时，书页的白天、黄昏、夜只跟盖子走。
+- 打开之后，如果桥在角度帧里带了房间的光，天空会缓到对应的那一档：暗是夜，亮是白天，中间是黄昏。灯在门槛上来回时不会一下一下地闪。合页仍然管开合、日晷和小秘密。没有读数时不提示，天空继续用书里的时间。
+- 当前未接入物理光传感器：真实合页模式只从 `POPUP_LUX` 读取固定值；回放只读取轨迹文件的 `light` 字段。
+- 假角度会自己把光从夜走到白天再走回来，大约 28 秒一圈。想钉住某一档，可以在启动前设 `POPUP_LUX`（例如 `5` 是夜，`800` 是白天）。手感数字在 `frontend/js/tuning.js` 的 `ambient`。
+
+## 二·十八、轻拍一下，或敲两下、三下（不剧透版）
+
+- 轻轻拍一下，小屋的门会动一下，小猫抬头看你。拍得重一点，它会害羞，和被猛地合上时是同一种害羞，但书还开着。
+- 已经靠近某张还没揭开的贴纸时，连敲两下会把那一张揭开。附近没有，就没有。
+- 连敲三下，门前会扬起一小团花瓣，大约半秒多，然后消失。这不是换季时横着扫过书页的那一道。
+- 这些动作大约每秒只听一次。换季正在补播、或开场幕布还没演完时，拍和敲都不算。
+- 桥只告诉网页「是哪一种、有多用力」，不把原始波形送过来。没有传感器时，可以用 `1` / `2` / `3` / `4` 在页面上试。数字在 `frontend/js/tuning.js` 的 `tap*`。
+
+## 二·十九、窗台上的一份重量（不剧透版）
+
+- 带 Force Touch 的触控板可以当一个很轻的礼物：把一样小东西在板上放稳，窗台上会多出一只小纸盒，小猫凑过去闻一下，然后照旧蹲着。拿开，纸盒离开，它把鼻子收回来。
+- 这不是秤。页面上没有克数，也没有仪表。力度只是角度帧上一个可有可无的 `weight`（0 到 1）。没有这块触控板、或桥没带上这个字段时，书和以前一样，不会报错。
+- 合页还是合页。滑块、假角度、真实盖角都不变。东西一直放着不会反复闻；拿开再放，也要隔一会儿。
+- 数字在 `frontend/js/tuning.js` 的 `TUNING.trackWeight`。真机上的 Force Touch 读数还没核对过。
+
 ## 三、运行
 
 ### 怎么开、怎么停
@@ -136,7 +215,7 @@
 
 后台启动不会问 `[y/n]`，缺的 Python 依赖会直接装。`.app` 里的启动器设了 `POPUP_FOREGROUND=1`，那个进程留在前台，方便系统把它当成正在运行的应用；另开终端仍可以用仓库里的 `./start.sh stop`（pid 写在包内的 `logs/`）。
 
-默认是**假角度桥 + 静态页**。浏览器打开脚本打印的地址（默认 <http://127.0.0.1:8000>）。左下圆点变绿，滑块被禁用，书跟着 0→130→0 开合。
+默认是**假角度桥 + 静态页**。浏览器打开脚本打印的地址（默认 <http://127.0.0.1:19081/?ws=ws://127.0.0.1:19876>），一次即可，不用连刷。脚本会等静态页和桥都开始听（本机有 IPv6 时包括 `::1`）才打印这行。左下圆点变绿，按钮是「■ 停止演示」，书跟着 0→130→0 开合。再点一次按钮，扫角停住，滑块可以拖。`./start.sh --sensor` 不会打开这段演示，合页角度直接驱动书。
 
 同一模式再执行一次：服务还健康的话只打印地址，不会占第二个端口。
 
@@ -148,7 +227,7 @@
 ./start.sh --no-docker              # 本机 python，不建容器
 ./start.sh --docker                 # 必须用 Docker
 ./start.sh --restart                # 停掉上次的进程/容器再启动
-./start.sh --port 8123 --ws-port 8765
+./start.sh --port 8123 --ws-port 19876
 ./start.sh --sensor --smooth 0.5 --offset -3
 ./start.sh stop
 ./start.sh test --yes              # ESLint、tsc、单元测试、无头冒烟
@@ -197,20 +276,20 @@ Docker 可用时，静态页和假桥进容器（`docker/Dockerfile.web`、`dock
 
 **不要双击 `frontend/index.html`（file://）**。ES module 会被拦，页面是黑的。
 
-快捷键：`H` 面板，`←` / `→` 每次 ±2°，`M` 静音，`J` 手账，`Esc` 关手账。
-URL：`?hud=0` 藏面板；`?ws=ws://127.0.0.1:9000` 改桥地址；`?season=0..3`；`?reset=1` 清空存档；`?nostore=1` 本次不读写；`?pdb=1` 保留绘图缓冲（截图用，平时更吃合成线程）。
+快捷键：`H` 面板，`←` / `→` 每次 ±2°，`M` 静音，`K` 手感（常 / 低 / 关），`J` 贴纸本，`Esc` 松开粘在小猫上的光标，否则关贴纸本或集齐画面，`C` 分享今天的小屋。开发时 `1` 轻拍、`2` 连敲两下、`3` 连敲三下、`4` 重拍（和桥上的 tap 帧走同一条判定）。
+URL：`?hud=0` 藏面板；`?ws=ws://127.0.0.1:9000` 改桥地址；`?season=0..3`；`?reset=1` 清空存档；`?nostore=1` 本次不读写；`?shareclip=1` 分享时一并录短片（默认不录）；`?pdb=1` 保留绘图缓冲（截图用，平时更吃合成线程）。
 面板里的「自动演示」会自己来回扫角度。
 
-桥连上且角度在 1.5 秒内到达时，左下圆点是绿的，滑块禁用。角度停了但连接还在，圆点变黄，可以改用滑块。套接字断开则马上回到灰点和「模拟模式」，大约每 2 秒重连一次，不会越连越多。健康检查在 `http://127.0.0.1:<ws 端口+1>/health`。
+桥连上且角度在 1.5 秒内到达时，左下圆点是绿的。假角度桥这时按钮是「■ 停止演示」，滑块禁用；再点一次改为滑块。实机合页（`--sensor`）按钮保持「▶ 自动演示」，角度跟盖子走，滑块禁用。只有再点按钮才会暂时改成本地扫角，点「停止」后回到合页。角度停了但连接还在，圆点变黄，可以改用滑块。套接字断开则马上回到灰点和「模拟模式」，大约每 2 秒重连一次；握手卡住超过 1.5 秒会主动关掉再连，不会越连越多，也不必靠刷新。健康检查在 `http://127.0.0.1:<ws 端口+1>/health`（默认 19877）。
 
 ### 仍想手动启动
 
 ```bash
-python3 -m http.server 8000 --directory frontend
+python3 backend/static_server.py --port 19081 --directory frontend --bind loopback
 python3 -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements.txt
 backend/.venv/bin/python backend/bridge.py --fake
-curl -s http://127.0.0.1:8766/health
+curl -s http://127.0.0.1:19877/health
 ```
 
 真实传感器改用 `backend/requirements-sensor.txt`，macOS 上先 `brew install hidapi`，然后去掉 `--fake`。
@@ -224,8 +303,8 @@ curl -s http://127.0.0.1:8766/health
 | `--offset` | 0 | 角度偏移（校准用，度） |
 | `--smooth` | 0 | 低通平滑 0–0.95，数值越大越稳越慢 |
 | `--clamp` | 180 | 角度上限（网页自己会再限制到 130） |
-| `--host` / `--port` | localhost / 8765 | WebSocket 监听地址 |
-| `--http-port` | 8766 | `GET /health`。`./start.sh` 默认用 ws 端口 + 1 |
+| `--host` / `--port` | localhost / 19876 | WebSocket 监听地址。`localhost`、`127.0.0.1`、`::1` 会同时绑 IPv4 和 IPv6 环回 |
+| `--http-port` | 19877 | `GET /health`。`./start.sh` 默认用 ws 端口 + 1 |
 
 ## 四、排查问题
 
@@ -259,10 +338,12 @@ curl -s http://127.0.0.1:8766/health
 3. 先用开源的 LidAngleSensor（Swift 原生小工具）确认你的机器在这个系统版本上确实读得到角度，再回来查 `backend/bridge.py`。
 4. 看 pybooklid 的 issue / README：<https://github.com/tcsenpai/pybooklid>。
 
-## 六、诚实说明（已验证 / 未验证）
+## 六、验证范围（当前与历史）
+
+2026-11-05 的本机检查与限制见 [本轮稳定性验收](docs/project-knowledge/stability.md)。下列按版本记录属于历史说明，不能直接作为当前代码已通过的证据。
 
 - 已在无头 Chrome（SwiftShader 软件渲染）里验证：各角度渲染、弹簧动画、小猫状态机（探头→跳窗台→彩蛋→哈欠→睡觉）、WebSocket 自动检测与断线回退（用 `backend/bridge.py --fake` 在 Linux 上联调）。
-- **`backend/bridge.py` 读真实传感器的那部分没有在真实 Mac 上测试过**。pybooklid 的 API（`LidSensor()` / `read_angle()` / `disconnect()`）是读了 1.0.0 版源码确认的，但不保证在你的机器上一次跑通；原始值范围、是否需要 sudo 都要你实测。
+- 本轮在当前 Mac 上取得真实合页角度，并验证关闭后再次打开；这不覆盖完整开合、原生程序共读或锁屏恢复。其他机型、系统和权限条件仍需分别验收。
 - 灯光、相机是在软件渲染下调的，真 GPU 上（M1 Max）亮度可能略有差异，可以调 `frontend/js/gfx.js` 里的灯光强度。
 
 - v2–v6 的画面（树的立起、速度/停留/晃动/合盖、四季与换季、日晷、小猫的一天、清晨伸懒腰）当时是在无头 Chrome 里对过的。那些按版本堆的脚本已经换成 `tests/unit/` 和一条冒烟，见第七节。**真实声音输出没有人耳听过**：只能证明合成出来的波形不是静音，音色好不好听、音量合不合适要你在 Mac 上自己听，`frontend/js/audio.js` 顶部的参数可调。
@@ -274,13 +355,32 @@ curl -s http://127.0.0.1:8766/health
 
 ## 七、测试
 
+先准备依赖并运行检查：
+
 ```bash
 ./start.sh test --yes
 ```
 
-会装好检查用的 npm 包和 `tests/requirements.txt`（Playwright、Pillow），然后依次跑 ESLint、`tsc -p tsconfig.json --noEmit`、`node --test tests/unit/*.test.js`、`PYTHONPATH=backend python -m unittest`、以及 `tests/e2e/smoke.py`。有本机 Chrome 就用它（SwiftShader）；没有就装 Playwright 自带的 Chromium。
+默认创建独立的 `.venv-test/`（使用 Python 3.12），不会修改真实传感器使用的 `backend/.venv/`。前端使用 `npm ci` 按锁文件安装；浏览器依赖安装到测试环境。基准为 Node.js 22、Python 3.12。已有环境可用 `POPUP_PYTHON=/绝对路径/python` 指定。
 
-冒烟自己拉起假桥（默认 WebSocket 18665、健康检查 18666），静态页用 8133。截图失败不会让整次冒烟失败：软件渲染下 `ReadPixels` 可能超时。
+依赖准备好后，只检查、不自动安装：
+
+```bash
+./start.sh test --no-install
+```
+
+依次执行代码规则检查、JavaScript 类型检查、前后端单元检查、浏览器冒烟、分享卡和换季补播检查。缺少依赖或浏览器时直接失败；已有 `CHROME` 可指定可执行浏览器路径。测试桥都带 `--no-optional-hardware`，不访问本机触控板力度，不触发物理轻点；回放里的力度仍可用。真实合页和物理反馈单独人工验收。
+
+浏览器检查独占静态端口 8133、消息端口 18665、健康端口 18666，Python 桥集成检查另用 17665/17666 和 17671/17672。占用即报错，不复用或停止其他服务。日志在 `.run/test-suite.log`（执行时重定向保存）和 `.run/test-*.log`，图片在 `shots/`；这些均不进版本控制。
+
+单独重跑浏览器检查（依赖已经准备好）：
+
+```bash
+.venv-test/bin/python tests/run_browser.py
+.venv-test/bin/python tests/run_browser.py share_card season_catchup
+```
+
+浏览器测试使用隔离存储；可见性事件模拟不等同于真实锁屏或休眠。本轮结果、环境及待验收场景见 [稳定性验收](docs/project-knowledge/stability.md)。
 
 ---
 
