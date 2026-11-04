@@ -141,6 +141,22 @@ def main():
             check("打开短片后能录 webm", head.startswith(WEBM) and webm.get("size", 0) > 100, f"size={webm.get('size')} head={head[:4].hex()}")
         else:
             check("短片录不了时仍是 png", opt.get("ok") is True and opt.get("clip") == "png", opt.get("clip"))
+        winter.evaluate("Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{write:async()=>{throw new DOMException('denied','NotAllowedError')}}})")
+        denied = winter.evaluate("__popup.shareCard({download:false, clip:false, toast:false})")
+        check("剪贴板被拒绝仍有图片", denied.get("ok") and denied.get("copied") is False)
+        winter.evaluate("window.__originalRecorder = window.MediaRecorder; window.MediaRecorder = undefined")
+        unsupported = winter.evaluate("__popup.shareCard({download:false, copy:false, clip:true, toast:false})")
+        check("不支持录制仍有图片", unsupported.get("ok") and unsupported.get("clip") == "png")
+        winter.evaluate("() => { window.MediaRecorder = class { static isTypeSupported() {return true} constructor() {throw new Error('模拟录制失败')} }; }")
+        failed = winter.evaluate("__popup.shareCard({download:false, copy:false, clip:true, toast:false})")
+        check("录制启动失败仍有图片", failed.get("ok") and failed.get("clip") == "png")
+        winter.evaluate("() => { window.MediaRecorder = window.__originalRecorder; }")
+        busy = winter.evaluate("""async () => {
+          const first = __popup.shareCard({download:false, copy:false, clip:true, seconds:1, toast:false});
+          const second = await __popup.shareCard({download:false, copy:false, clip:true, toast:false});
+          return {first:await first, second};
+        }""")
+        check("重复分享不会并发录制", busy["first"].get("ok") and busy["second"].get("reason") == "busy")
         winter.close()
         b.close()
 

@@ -52,7 +52,14 @@ class HapticMessageTest(unittest.TestCase):
 
 
 def _handshake(port):
-    sock = socket.create_connection(("127.0.0.1", port), 2)
+    for attempt in range(40):
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), 2)
+            break
+        except ConnectionRefusedError:
+            if attempt == 39:
+                raise
+            time.sleep(0.05)
     sock.settimeout(2)
     key = "dGhlIHNhbXBsZSBub25jZQ=="
     req = (
@@ -99,8 +106,11 @@ def _read_text(sock):
 
 class HapticBridgeTest(unittest.TestCase):
     def test_client_tap_does_not_drop_the_angle_stream(self):
+        sys.path.insert(0, os.path.join(ROOT, "tests"))
+        from paths import assert_ports_free
+        assert_ports_free(WS_PORT, HTTP_PORT)
         proc = subprocess.Popen(
-            [sys.executable, BRIDGE, "--fake", "--host", "127.0.0.1", "--port", str(WS_PORT), "--http-port", str(HTTP_PORT)],
+            [sys.executable, BRIDGE, "--fake", "--no-optional-hardware", "--host", "127.0.0.1", "--port", str(WS_PORT), "--http-port", str(HTTP_PORT)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -139,8 +149,56 @@ class HapticBridgeTest(unittest.TestCase):
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
             if proc.stdout:
                 proc.stdout.close()
+
+
+class HardwareIsolationTest(unittest.TestCase):
+    def test_disabled_haptic_never_calls_device(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from broadcast import _loop
+        from health import Status
+
+        class EndTest(Exception):
+            pass
+
+        class Client:
+            def __aiter__(self):
+                return self.frames()
+
+            async def frames(self):
+                yield '{"type":"haptic","pattern":"tap"}'
+
+        class Server:
+            async def __aenter__(self):
+                await self.handler(Client())
+
+            async def __aexit__(self, *_):
+                pass
+
+        def serve(handler, *_):
+            server = Server()
+            server.handler = handler
+            return server
+
+        class Source:
+            name = 'test'
+            mode = 'fake'
+
+            def read(self):
+                raise EndTest()
+
+        args = SimpleNamespace(host='127.0.0.1', port=12345, http_port=12346,
+                               hz=45, no_optional_hardware=True)
+        with patch('broadcast.serve_health', return_value=object()), \
+             patch('websockets.asyncio.server.serve', side_effect=serve), \
+             patch('broadcast.pulse_trackpad') as pulse:
+            with self.assertRaises(EndTest):
+                asyncio.run(_loop(Source(), args, Status('fake', 45), None, None))
+            pulse.assert_not_called()
 
 
 if __name__ == "__main__":

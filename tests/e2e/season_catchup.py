@@ -44,11 +44,15 @@ STORY = """
   let n = 1;
   const packet = (angle) => JSON.stringify({ v: 1, type: 'angle', seq: n++, angle, t: n * 10, mode: 'sensor' });
 
+  const cyclesBefore = pop.store.cycles;
   window.__setPageHidden(true);
   pop.frame(0.05);
   pop.pushRaw(packet(4));
   pop.frame(0.05);
   const closed = pop.dbg();
+  const cyclesClosed = pop.store.cycles;
+  pop.frame(0.05);
+  const cyclesRepeated = pop.store.cycles;
 
   window.__setPageHidden(false);
   const afterEvent = {
@@ -93,6 +97,7 @@ STORY = """
   }
   const motifs = pop.sound.events.filter((name) => String(name).startsWith('motif-')).length;
   return {
+    cyclesBefore, cyclesClosed, cyclesRepeated,
     beforeSecond,
     closedT: closed.seasonT,
     closedFrom: closed.seasonFrom,
@@ -138,6 +143,7 @@ def main():
         data = page.evaluate(STORY)
         browser.close()
 
+    check("一次合盖只增加一次轮次", data["cyclesClosed"] == data["cyclesBefore"] + 1 and data["cyclesRepeated"] == data["cyclesClosed"], str([data["cyclesBefore"], data["cyclesClosed"], data["cyclesRepeated"]]))
     check("没有页面异常", not errs, "; ".join(errs[:3]))
     check(
         "隐藏时合严记上待播",

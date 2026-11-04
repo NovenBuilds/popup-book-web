@@ -163,9 +163,11 @@ class ForceTouch:
         self._live = False
 
 
-def open_weight(source):
-    """有 read_weight 就用它。否则尝试触控板，失败也返回一个永远读到 None 的对象。"""
+def open_weight(source, allow_hardware=True):
+    """优先用适配器力度；允许硬件时才尝试触控板，禁用时返回空读数。"""
     fn = getattr(source, "read_weight", None)
     if callable(fn):
         return _AdapterWeight(fn)
+    if not allow_hardware:
+        return _AdapterWeight(lambda: None)
     return ForceTouch()

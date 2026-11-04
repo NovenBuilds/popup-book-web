@@ -12,7 +12,7 @@ import urllib.request
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BASE, BRIDGE, python_cmd, shot_dir  # noqa: E402
+from paths import assert_ports_free, BASE, BRIDGE, python_cmd, shot_dir  # noqa: E402
 
 WS_PORT = int(os.environ.get("POPUP_WS", "18665"))
 HTTP_PORT = int(os.environ.get("POPUP_HTTP", "18666"))
@@ -29,14 +29,17 @@ def check(name, ok, info=""):
 
 
 def main():
+    assert_ports_free(WS_PORT, HTTP_PORT)
     br = subprocess.Popen(
-        [python_cmd(), BRIDGE, "--fake", "--host", "127.0.0.1", "--port", str(WS_PORT), "--http-port", str(HTTP_PORT)],
+        [python_cmd(), BRIDGE, "--fake", "--no-optional-hardware", "--host", "127.0.0.1", "--port", str(WS_PORT), "--http-port", str(HTTP_PORT)],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
     errs = []
     try:
         health = None
         for _ in range(40):
+            if br.poll() is not None:
+                raise RuntimeError(br.stdout.read())
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{HTTP_PORT}/health", timeout=0.5) as res:
                     health = json.loads(res.read().decode())
@@ -182,6 +185,60 @@ def main():
             connects = dead.evaluate("__popup.dbg().net.connects")
             check("断桥重连有上界", connects <= 8, f"connects={connects}")
             dead.close()
+            # 模拟消息经过真实网页连接解析；不接触任何物理设备。
+            print("准备模拟连接页面", flush=True)
+            net = b.new_page(viewport={"width": 800, "height": 600})
+            net.on("pageerror", lambda error: errs.append(str(error)))
+            links = []
+            net.route_web_socket("**/test-sensor", lambda route: links.append(route))
+            net.goto(f"{BASE}?nostore=1&ws=ws://127.0.0.1:18665/test-sensor", wait_until="domcontentloaded")
+            print("模拟连接页面已加载", flush=True)
+            net.wait_for_function("window.__popup", timeout=30000)
+            packet = lambda seq, **fields: json.dumps(dict(v=1, seq=seq, mode="sensor", **fields))
+            net.wait_for_function("__popup.dbg().net.link === 'wait'")
+            initial_connections = len(links)
+            links[-1].send(packet(1, type="angle", angle=83))
+            net.wait_for_function("__popup.dbg().net.link === 'live' && __popup.S.target === 83")
+            check("模拟实机角度默认接管", net.locator("#slider").is_disabled())
+            for seq in range(2, 7):
+                links[-1].send(packet(seq, type="heartbeat"))
+                net.wait_for_timeout(400)
+            net.wait_for_function("__popup.dbg().net.link === 'stale'")
+            check("只有心跳时角度仍过期", not net.locator("#slider").is_disabled())
+            links[-1].close()
+            net.wait_for_function("__popup.dbg().net.link === 'down'")
+            net.wait_for_function("__popup.dbg().net.link === 'wait'", timeout=10000)
+            links[-1].send(packet(1, type="angle", angle=71))
+            net.wait_for_function("__popup.dbg().net.link === 'live' && __popup.S.target === 71")
+            net.wait_for_function("document.querySelector('#slider').disabled")
+            check("断线后重连恢复且重置序号", len(links) == initial_connections + 1, f"connections={initial_connections}→{len(links)}")
+            net.close()
+
+            # 每次 new_page 都有隔离存储；同一页刷新保留自己的存档。
+            saved = b.new_page(viewport={"width": 800, "height": 600})
+            saved.on("pageerror", lambda error: errs.append(str(error)))
+            saved.goto(f"{BASE}?ws=ws://127.0.0.1:9")
+            saved.wait_for_function("window.__popup", timeout=30000)
+            saved.evaluate("__popup.store.addSecret('heart'); __popup.store.setMuted(true)")
+            saved.reload()
+            saved.wait_for_function("window.__popup", timeout=30000)
+            check("同站点刷新保留存档", saved.evaluate("__popup.store.hasSecret('heart') && __popup.store.muted"))
+            saved.goto(QUIET)
+            saved.wait_for_function("window.__popup", timeout=30000)
+            check("nostore 不读取已有存档", not saved.evaluate("__popup.store.hasSecret('heart')"))
+            saved.evaluate("__popup.store.addSecret('seam')")
+            saved.goto(f"{BASE}?ws=ws://127.0.0.1:9")
+            saved.wait_for_function("window.__popup", timeout=30000)
+            check("nostore 不覆盖持久存档", saved.evaluate("__popup.store.hasSecret('heart') && !__popup.store.hasSecret('seam')"))
+            saved.close()
+
+            blocked = b.new_page(viewport={"width": 800, "height": 600})
+            blocked.on("pageerror", lambda error: errs.append(str(error)))
+            blocked.add_init_script("Object.defineProperty(window, 'localStorage', {get() {throw new DOMException('denied', 'SecurityError')}})")
+            blocked.goto(f"{BASE}?ws=ws://127.0.0.1:9")
+            blocked.wait_for_function("window.__popup", timeout=30000)
+            check("存储被拒绝时退为内存", blocked.evaluate("__popup.store.addSecret('heart'); __popup.store.hasSecret('heart')"))
+            blocked.close()
             b.close()
     finally:
         if br.poll() is None:
@@ -190,6 +247,7 @@ def main():
                 br.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 br.kill()
+                br.wait()
 
     check("没有页面异常", not errs, "; ".join(errs[:3]))
     bad = [n for n, ok in results if not ok]

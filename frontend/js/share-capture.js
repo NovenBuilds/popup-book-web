@@ -130,13 +130,19 @@ export function mediaRecorderMime() {
  */
 export function startRecorder(canvas, mime) {
   const stream = canvas.captureStream(0);
+  const endTracks = () => { stream.getTracks().forEach((t) => t.stop()); };
   const track = stream.getVideoTracks()[0];
   /** @type {MediaRecorder} */
   let rec;
   try {
     rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
   } catch {
-    rec = new MediaRecorder(stream, { mimeType: mime });
+    try {
+      rec = new MediaRecorder(stream, { mimeType: mime });
+    } catch (error) {
+      endTracks();
+      throw error;
+    }
   }
   /** @type {Blob[]} */
   const chunks = [];
@@ -146,8 +152,12 @@ export function startRecorder(canvas, mime) {
     rec.onerror = () => reject(new Error('recorder'));
     rec.onstop = () => resolve(new Blob(chunks, { type: mime }));
   });
-  rec.start(200);
-  const endTracks = () => { stream.getTracks().forEach((t) => t.stop()); };
+  try {
+    rec.start(200);
+  } catch (error) {
+    endTracks();
+    throw error;
+  }
   return {
     requestFrame() {
       const live = /** @type {any} */ (track);

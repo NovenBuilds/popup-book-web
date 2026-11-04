@@ -58,6 +58,7 @@ def main():
     p.add_argument("--offset", type=float, default=0.0, help="给角度加偏移（校准用），默认 0")
     p.add_argument("--clamp", type=float, default=180.0, help="最大角度上限，默认 180（网页自己会限制到 130）")
     p.add_argument("--smooth", type=float, default=0.0, help="低通平滑系数 0~0.95，默认 0（不平滑）")
+    p.add_argument("--no-optional-hardware", action="store_true", help="不打开本机触控板力度或触发物理轻点；回放力度不受影响")
     args = p.parse_args()
     args.hz = min(max(args.hz, 5), 120)
     source = build_source(args)

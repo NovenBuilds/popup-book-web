@@ -3,6 +3,8 @@
 合上笔记本盖子 = 合上这本书；慢慢打开屏幕，一本纸艺立体书就在屏幕里展开：松林、小木屋、亮灯的窗、一只橘猫，最后是月亮、星星和萤火虫。
 网页只关心一个输入：**合页角度 `angle`（0–130°）**。没有传感器时用滑块也能完整体验。
 
+当前代码的接管基线、功能状态与验证限制见 [项目知识入口](docs/project-knowledge/index.md)（2026-11-05）。
+
 ## 先跑起来
 
 ```bash
@@ -14,7 +16,7 @@
 
 卡顿写在 `PERFORMANCE.md`。角度帧写在 `docs/PROTOCOL.md`。模块怎么分写在 `docs/ARCHITECTURE.md`。
 
-**现在是 v9，穿模和后台启动在标签 `fixed-v10`。** 玩法仍是那本会回应你的书：开得快慢、停多久、晃不晃、怎么合上，它都有不同的反应；四季随着每次开合轮换；还藏了 8 个小秘密（v4 新增 1 个）等你自己发现（贴纸本一开始是空的，靠近了才露出提示，**答案放在文末"剧透"章节，想自己玩的话别往下翻**）。v8 把判定收成状态机，把角度来源收成适配器。手感数字仍在 `frontend/js/tuning.js`。春、冬各多了一句季节反应，不进手账。v9 加上 Homebrew formula 和未签名的打包脚本，仍然不签名、不上架。
+当前工作区位于 `creative/v14` 开发分支；分支名不代表已发布版本。核心体验包括四季开合、八个小秘密、猫的记忆、贴纸本、轻拍与触控板互动、分享卡及可选短片。历史演进见 `CHANGELOG.md` 与 `ITERATIONS.md`，当前能力与验收范围见项目知识入口。手感数字仍集中在 `frontend/js/tuning.js`。Homebrew 与 Mac 打包脚本尚不等于已经完成本轮安装验收。
 
 ## 一、文件
 
@@ -175,6 +177,7 @@
 
 - 左上角有「开启环境光」。点一下变成「关闭环境光」，这个选择会记住。关掉时，书页的白天、黄昏、夜只跟盖子走。
 - 打开之后，如果桥在角度帧里带了房间的光，天空会缓到对应的那一档：暗是夜，亮是白天，中间是黄昏。灯在门槛上来回时不会一下一下地闪。合页仍然管开合、日晷和小秘密。没有读数时不提示，天空继续用书里的时间。
+- 当前未接入物理光传感器：真实合页模式只从 `POPUP_LUX` 读取固定值；回放只读取轨迹文件的 `light` 字段。
 - 假角度会自己把光从夜走到白天再走回来，大约 28 秒一圈。想钉住某一档，可以在启动前设 `POPUP_LUX`（例如 `5` 是夜，`800` 是白天）。手感数字在 `frontend/js/tuning.js` 的 `ambient`。
 
 ## 二·十八、轻拍一下，或敲两下、三下（不剧透版）
@@ -335,10 +338,12 @@ curl -s http://127.0.0.1:19877/health
 3. 先用开源的 LidAngleSensor（Swift 原生小工具）确认你的机器在这个系统版本上确实读得到角度，再回来查 `backend/bridge.py`。
 4. 看 pybooklid 的 issue / README：<https://github.com/tcsenpai/pybooklid>。
 
-## 六、诚实说明（已验证 / 未验证）
+## 六、验证范围（当前与历史）
+
+2026-11-05 的本机检查与限制见 [本轮稳定性验收](docs/project-knowledge/stability.md)。下列按版本记录属于历史说明，不能直接作为当前代码已通过的证据。
 
 - 已在无头 Chrome（SwiftShader 软件渲染）里验证：各角度渲染、弹簧动画、小猫状态机（探头→跳窗台→彩蛋→哈欠→睡觉）、WebSocket 自动检测与断线回退（用 `backend/bridge.py --fake` 在 Linux 上联调）。
-- **`backend/bridge.py` 读真实传感器的那部分没有在真实 Mac 上测试过**。pybooklid 的 API（`LidSensor()` / `read_angle()` / `disconnect()`）是读了 1.0.0 版源码确认的，但不保证在你的机器上一次跑通；原始值范围、是否需要 sudo 都要你实测。
+- 本轮在当前 Mac 上取得真实合页角度，并验证关闭后再次打开；这不覆盖完整开合、原生程序共读或锁屏恢复。其他机型、系统和权限条件仍需分别验收。
 - 灯光、相机是在软件渲染下调的，真 GPU 上（M1 Max）亮度可能略有差异，可以调 `frontend/js/gfx.js` 里的灯光强度。
 
 - v2–v6 的画面（树的立起、速度/停留/晃动/合盖、四季与换季、日晷、小猫的一天、清晨伸懒腰）当时是在无头 Chrome 里对过的。那些按版本堆的脚本已经换成 `tests/unit/` 和一条冒烟，见第七节。**真实声音输出没有人耳听过**：只能证明合成出来的波形不是静音，音色好不好听、音量合不合适要你在 Mac 上自己听，`frontend/js/audio.js` 顶部的参数可调。
@@ -350,13 +355,32 @@ curl -s http://127.0.0.1:19877/health
 
 ## 七、测试
 
+先准备依赖并运行检查：
+
 ```bash
 ./start.sh test --yes
 ```
 
-会装好检查用的 npm 包和 `tests/requirements.txt`（Playwright、Pillow），然后依次跑 ESLint、`tsc -p tsconfig.json --noEmit`、`node --test tests/unit/*.test.js`、`PYTHONPATH=backend python -m unittest`、以及 `tests/e2e/smoke.py`。有本机 Chrome 就用它（SwiftShader）；没有就装 Playwright 自带的 Chromium。
+默认创建独立的 `.venv-test/`（使用 Python 3.12），不会修改真实传感器使用的 `backend/.venv/`。前端使用 `npm ci` 按锁文件安装；浏览器依赖安装到测试环境。基准为 Node.js 22、Python 3.12。已有环境可用 `POPUP_PYTHON=/绝对路径/python` 指定。
 
-冒烟自己拉起假桥（默认 WebSocket 18665、健康检查 18666），静态页用 8133。截图失败不会让整次冒烟失败：软件渲染下 `ReadPixels` 可能超时。
+依赖准备好后，只检查、不自动安装：
+
+```bash
+./start.sh test --no-install
+```
+
+依次执行代码规则检查、JavaScript 类型检查、前后端单元检查、浏览器冒烟、分享卡和换季补播检查。缺少依赖或浏览器时直接失败；已有 `CHROME` 可指定可执行浏览器路径。测试桥都带 `--no-optional-hardware`，不访问本机触控板力度，不触发物理轻点；回放里的力度仍可用。真实合页和物理反馈单独人工验收。
+
+浏览器检查独占静态端口 8133、消息端口 18665、健康端口 18666，Python 桥集成检查另用 17665/17666 和 17671/17672。占用即报错，不复用或停止其他服务。日志在 `.run/test-suite.log`（执行时重定向保存）和 `.run/test-*.log`，图片在 `shots/`；这些均不进版本控制。
+
+单独重跑浏览器检查（依赖已经准备好）：
+
+```bash
+.venv-test/bin/python tests/run_browser.py
+.venv-test/bin/python tests/run_browser.py share_card season_catchup
+```
+
+浏览器测试使用隔离存储；可见性事件模拟不等同于真实锁屏或休眠。本轮结果、环境及待验收场景见 [稳定性验收](docs/project-knowledge/stability.md)。
 
 ---
 

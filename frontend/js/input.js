@@ -112,7 +112,12 @@ export function createInput(W) {
       arm();
     }, 1500);
     const clearWatch = () => clearTimeout(watchdog);
-    sock.onopen = () => { clearWatch(); gate.reset(); };
+    sock.onopen = () => {
+      clearWatch();
+      gate.reset();
+      // 新连接尚无角度，不能继承上一条连接的新鲜度。
+      lastAngleAt = 0;
+    };
     sock.onmessage = (ev) => { acceptRaw(ev.data); };
     // error 之后一定会 close。只在 close 里重连，避免两条路径把连接数翻倍。
     sock.onerror = () => { try { sock.close(); } catch { /* onclose 负责重连 */ } };

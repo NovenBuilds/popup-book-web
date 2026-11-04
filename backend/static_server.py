@@ -16,6 +16,9 @@ from netbind import loopback_hosts
 
 
 class Handler(SimpleHTTPRequestHandler):
+    # 模块图会同时请求大量脚本；复用连接，避免每个文件都重新握手。
+    protocol_version = "HTTP/1.1"
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
@@ -27,6 +30,8 @@ class Handler(SimpleHTTPRequestHandler):
 def _listen(host, port, handler):
     class Server(ThreadingHTTPServer):
         allow_reuse_address = True
+        # 默认等待队列只有 5，macOS 上并发加载模块会重置超出的连接。
+        request_queue_size = 128
         address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
         daemon_threads = True
 

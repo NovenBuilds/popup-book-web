@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from sensors.fake import FakeSource
 from sensors.force import ForceTouch, WeightGate, open_weight
@@ -29,6 +30,21 @@ class WeightGateTest(unittest.TestCase):
 
 
 class ForceTouchTest(unittest.TestCase):
+    def test_disabled_hardware_is_never_opened(self):
+        with patch('sensors.force.ForceTouch', side_effect=AssertionError('不应打开设备')):
+            port = open_weight(FakeSource(), allow_hardware=False)
+            self.assertIsNone(port.read())
+            port.close()
+
+    def test_disabled_hardware_preserves_adapter_weight(self):
+        class Replay:
+            def read_weight(self):
+                return 0.42
+        with patch('sensors.force.ForceTouch', side_effect=AssertionError('不应打开设备')):
+            port = open_weight(Replay(), allow_hardware=False)
+            self.assertEqual(port.read(), 0.42)
+            port.close()
+
     def test_non_darwin_is_silent(self):
         if sys.platform == "darwin":
             return

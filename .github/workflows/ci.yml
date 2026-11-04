@@ -26,4 +26,4 @@ jobs:
           backend/.venv/bin/pip install -r backend/requirements.txt -r tests/requirements.txt
           backend/.venv/bin/python -m playwright install chromium
       - name: lint and tests
-        run: ./start.sh test --yes
+        run: POPUP_PYTHON="$PWD/backend/.venv/bin/python" ./start.sh test --no-install

@@ -5,6 +5,8 @@
 ```bash
 ./start.sh --fake --no-docker --yes
 ./start.sh test --yes
+# 依赖就绪后使用不安装模式重复检查
+./start.sh test --no-install
 ```
 
 `./start.sh test` 会跑 ESLint、`tsc --checkJs`、单元测试和无头冒烟。改完判定或协议，这两条都要过。

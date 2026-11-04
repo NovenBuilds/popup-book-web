@@ -69,7 +69,7 @@ def _frame_weight(port, gate, now):
 
 async def _run(source, args):
     status = Status(source.mode, args.hz)
-    weight_port = open_weight(source)
+    weight_port = open_weight(source, allow_hardware=not getattr(args, "no_optional_hardware", False))
     weight_gate = WeightGate()
     try:
         return await _loop(source, args, status, weight_port, weight_gate)
@@ -85,6 +85,7 @@ async def _loop(source, args, status, weight_port, weight_gate):
         return 1
 
     clients = set()
+    pulse = (lambda: False) if getattr(args, "no_optional_hardware", False) else pulse_trackpad
     boot = time.monotonic()
 
     def t_ms():
@@ -98,7 +99,7 @@ async def _loop(source, args, status, weight_port, weight_gate):
             async for raw in ws:
                 # 不认识的文本丢掉。轻点做不到时也不许把这条连接拆掉。
                 try:
-                    handle_client_text(raw, pulse_trackpad)
+                    handle_client_text(raw, pulse)
                 except Exception:
                     pass
         except Exception:

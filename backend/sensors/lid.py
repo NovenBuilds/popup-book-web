@@ -1,10 +1,32 @@
-"""macOS 上的 pybooklid 合页。这个文件没有在真机上跑过。"""
+"""macOS 上的 pybooklid 合页。实测范围见项目知识中的验收记录。"""
 
 import threading
 import time
+import sys
+import ctypes
 
 from sensors.ambient import AmbientProbe
 from sensors.base import AngleSource
+
+
+def configure_shared_hid():
+    """只允许共享打开；扩展不兼容时给出诊断，不退回独占设备。"""
+    try:
+        import hid
+    except ImportError as error:
+        raise RuntimeError("合页共享读取：无法导入 hid 扩展，请检查当前传感器环境") from error
+    try:
+        library = ctypes.CDLL(hid.__file__)
+        shared_open = library.hid_darwin_set_open_exclusive
+        shared_open.argtypes = [ctypes.c_int]
+        shared_open.restype = None
+        shared_open(0)
+    except (OSError, AttributeError, TypeError) as error:
+        raise RuntimeError(
+            f"合页共享读取配置失败：{type(error).__name__}；"
+            "需要 hid 扩展导出 hid_darwin_set_open_exclusive，"
+            "请核对实际 hidapi 版本及动态库，未尝试独占打开"
+        ) from error
 
 
 class PyBookLidSource(AngleSource):
@@ -23,12 +45,13 @@ class PyBookLidSource(AngleSource):
                 "  若提示找不到 hidapi：brew install hidapi\n"
                 "  或直接 ./start.sh --sensor"
             )
-        from pybooklid import LidSensor, LidSensorError
+        if sys.platform == "darwin":
+            configure_shared_hid()
 
         try:
             self.sensor = LidSensor()
-        except LidSensorError as e:
-            raise RuntimeError(f"找不到/打不开盖角传感器：{e}")
+        except Exception as e:
+            raise RuntimeError(f"合页初始化失败（共享打开已配置）：{type(e).__name__}: {e}") from e
         self._latest = None
         self._last_ok = 0.0
         self._stop = False

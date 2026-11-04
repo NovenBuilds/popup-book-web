@@ -66,7 +66,7 @@ usage() {
 
 命令:
   ./start.sh stop            按 pid 文件停掉后台的页面和桥
-  ./start.sh test [--yes]    ESLint、tsc、单元测试、无头浏览器冒烟
+  ./start.sh test [--yes | --no-install]    ESLint、tsc、单元测试、无头浏览器冒烟
 
 示例:
   ./start.sh
@@ -451,15 +451,19 @@ already_healthy() {
 }
 
 run_test_suite() {
+  local no_install=0
+  local test_python="${POPUP_PYTHON:-$ROOT/.venv-test/bin/python}"
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --no-install) no_install=1 ;;
       --yes) YES=1 ;;
       -h|--help)
         cat <<'EOF'
-用法: ./start.sh test [--yes]
+用法: ./start.sh test [--yes | --no-install]
 
 依次跑 ESLint、tsc（checkJs）、node 单元测试、Python 单元测试、无头浏览器冒烟。
-缺 node_modules 或 Python 测试依赖时会询问；--yes 直接安装。
+默认使用独立 .venv-test（Python 3.12），POPUP_PYTHON 可指定解释器。
+缺依赖时会询问；--yes 直接安装；--no-install 仅检查，缺失时退出，不联网安装。
 EOF
         exit 0
         ;;
@@ -469,20 +473,43 @@ EOF
   done
   command -v node >/dev/null 2>&1 || die "需要 node"
   command -v npm >/dev/null 2>&1 || die "需要 npm"
+  if [[ "$no_install" == 1 ]]; then
+    local missing=""
+    [[ -x "$ROOT/node_modules/.bin/eslint" ]] || missing="$missing eslint"
+    [[ -x "$ROOT/node_modules/.bin/tsc" ]] || missing="$missing typescript"
+    if [[ ! -x "$test_python" ]]; then
+      missing="$missing Python测试环境($test_python)"
+    else
+      local module
+      for module in websockets playwright PIL; do
+        "$test_python" -c "import $module" >/dev/null 2>&1 || missing="$missing $module"
+      done
+    fi
+    [[ -z "$missing" ]] || die "缺少检查依赖：${missing}；请先执行 ./start.sh test --yes 准备依赖"
+  elif [[ ! -x "$test_python" ]]; then
+    confirm "用 Python 3.12 创建独立 .venv-test？" || die "缺少测试环境，已取消"
+    python3.12 -m venv "$ROOT/.venv-test"
+    test_python="$ROOT/.venv-test/bin/python"
+  fi
+  PY="$test_python"
+  export POPUP_PYTHON="$PY"
   mkdir -p "$RUN_DIR"
   if [[ ! -x "$ROOT/node_modules/.bin/eslint" || ! -x "$ROOT/node_modules/.bin/tsc" ]]; then
-    confirm "安装前端检查依赖（npm install）？" || die "没有 eslint / tsc，已取消"
-    npm install
+    confirm "安装前端检查依赖（npm ci）？" || die "没有 eslint / tsc，已取消"
+    npm ci
   fi
-  ensure_venv "requirements.txt"
-  if ! "$PY" -c "import playwright, PIL" >/dev/null 2>&1; then
+  if ! "$PY" -c "import websockets, playwright, PIL" >/dev/null 2>&1; then
     confirm "安装 tests/requirements.txt（playwright、pillow）？" || die "没有浏览器测试依赖，已取消"
-    "$ROOT/backend/.venv/bin/pip" install -r "$ROOT/tests/requirements.txt"
+    "$PY" -m pip install -r "$ROOT/backend/requirements.txt" -r "$ROOT/tests/requirements.txt"
   fi
-  if [[ -x /usr/bin/google-chrome ]]; then
+  if [[ -n "${CHROME:-}" ]]; then
+    [[ -x "$CHROME" ]] || die "CHROME 指向的浏览器不可执行"
+  elif [[ -x /usr/bin/google-chrome ]]; then
     export CHROME=/usr/bin/google-chrome
   elif command -v chromium >/dev/null 2>&1; then
     export CHROME="$(command -v chromium)"
+  elif [[ "$no_install" == 1 ]]; then
+    "$PY" -c 'from playwright.sync_api import sync_playwright; import os; p=sync_playwright().start(); path=p.chromium.executable_path; p.stop(); assert os.path.isfile(path), "缺少 Chromium，请先准备浏览器"' || die "缺少浏览器，--no-install 不会安装"
   else
     log "本机没有 Chrome，安装 Playwright 自带的 Chromium"
     "$PY" -m playwright install chromium
@@ -495,31 +522,7 @@ EOF
   node --test "$ROOT"/tests/unit/*.test.js
   log "python unittest"
   PYTHONPATH="$ROOT/backend" "$PY" -m unittest discover -s "$ROOT/tests/unit" -p 'test_*.py'
-  local tport=8133 started=0
-  if ! web_ok "$tport"; then
-    if port_busy "$tport"; then die "端口 ${tport} 被占用，而且不是这本书的页面"; fi
-    python3 "$ROOT/backend/static_server.py" --port "$tport" --directory "$ROOT/frontend" --bind loopback >"$RUN_DIR/test-web.log" 2>&1 &
-    started=$!
-    local i
-    for i in $(seq 1 40); do web_ok "$tport" && break; sleep 0.1; done
-    web_ok "$tport" || { kill "$started" 2>/dev/null || true; die "测试用静态页没有起来"; }
-  fi
-  log "端到端冒烟 http://127.0.0.1:${tport}/"
-  local rc=0
-  POPUP_BASE="http://127.0.0.1:${tport}/index.html" POPUP_WS=18665 POPUP_HTTP=18666 \
-    "$PY" "$ROOT/tests/e2e/smoke.py" || rc=$?
-  if [[ "$rc" == 0 ]]; then
-    log "分享卡冒烟 http://127.0.0.1:${tport}/"
-    POPUP_BASE="http://127.0.0.1:${tport}/index.html" \
-      "$PY" "$ROOT/tests/e2e/share_card.py" || rc=$?
-  fi
-  if [[ "$rc" == 0 ]]; then
-    log "换季补播冒烟 http://127.0.0.1:${tport}/"
-    POPUP_BASE="http://127.0.0.1:${tport}/index.html" \
-      "$PY" "$ROOT/tests/e2e/season_catchup.py" || rc=$?
-  fi
-  if [[ "$started" != 0 ]]; then kill "$started" 2>/dev/null || true; wait "$started" 2>/dev/null || true; fi
-  if [[ "$rc" != 0 ]]; then die "冒烟失败（退出码 ${rc}）"; fi
+  "$PY" "$ROOT/tests/run_browser.py" || die "浏览器回归失败，见 .run/test-*.log"
   ok "lint、类型检查、单元测试、冒烟都过了"
 }
 

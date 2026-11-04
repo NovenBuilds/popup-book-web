@@ -22,3 +22,25 @@ def python_cmd():
     if os.path.isfile(venv):
         return venv
     return sys.executable
+
+
+def assert_ports_free(*ports):
+    """占用时拒绝启动，避免把他人的服务当作测试实例。"""
+    import socket
+    sockets = []
+    try:
+        for port in ports:
+            for family, host in ((socket.AF_INET, '127.0.0.1'), (socket.AF_INET6, '::1')):
+                sock = socket.socket(family, socket.SOCK_STREAM)
+                sockets.append(sock)
+                if family == socket.AF_INET6:
+                    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                try:
+                    sock.bind((host, port))
+                except OSError as error:
+                    if family == socket.AF_INET6 and error.errno in (47, 49, 97, 99):
+                        continue
+                    raise RuntimeError(f'测试端口 {host}:{port} 不可用；未启动测试服务') from error
+    finally:
+        for sock in sockets:
+            sock.close()
