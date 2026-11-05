@@ -16,7 +16,7 @@
 
 卡顿写在 `PERFORMANCE.md`。角度帧写在 `docs/PROTOCOL.md`。模块怎么分写在 `docs/ARCHITECTURE.md`。
 
-当前工作区位于 `creative/v14` 开发分支；分支名不代表已发布版本。核心体验包括四季开合、八个小秘密、猫的记忆、贴纸本、轻拍与触控板互动、分享卡及可选短片。历史演进见 `CHANGELOG.md` 与 `ITERATIONS.md`，当前能力与验收范围见项目知识入口。手感数字仍集中在 `frontend/js/tuning.js`。Homebrew 与 Mac 打包脚本尚不等于已经完成本轮安装验收。
+v14 开发成果及稳定性改进已合并到 `main`；代码合并不代表产品已发布。核心体验包括四季开合、八个小秘密、猫的记忆、贴纸本、轻拍与触控板互动、分享卡及可选短片。历史演进见 `CHANGELOG.md` 与 `ITERATIONS.md`，当前能力与验收范围见项目知识入口。手感数字仍集中在 `frontend/js/tuning.js`。Homebrew 与 Mac 打包脚本尚不等于已经完成本轮安装验收。
 
 ## 一、文件
 
